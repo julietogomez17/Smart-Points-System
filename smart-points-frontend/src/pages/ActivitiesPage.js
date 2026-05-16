@@ -327,14 +327,22 @@ function ActivitiesPage() {
     });
   };
 
-  const activeActivities =
-    userRole === 'admin'
-      ? activities.filter((a) =>
-          adminActivityTab === 'active'
-            ? a.status !== 'cancelled'
-            : a.status === 'cancelled'
-        )
-      : activities.filter((a) => a.status !== 'cancelled');
+const isManager = userRole === 'admin' || userRole === 'partner';
+
+const activeActivities =
+  userRole === 'admin'
+    ? activities.filter((a) =>
+        adminActivityTab === 'active'
+          ? a.status === 'open' || a.status === 'closed' || a.status === 'completed'
+          : a.status === 'cancelled'
+      )
+    : userRole === 'partner'
+    ? activities.filter((a) =>
+        adminActivityTab === 'active'
+          ? a.status !== 'cancelled'
+          : a.status === 'cancelled'
+      )
+    : activities.filter((a) => a.status === 'open');
 
   return (
     <div className="member-activities-page">
@@ -342,15 +350,20 @@ function ActivitiesPage() {
         <main className="member-main">
           <section className="member-header-card activity-admin-header">
             <div>
-              <h1>{userRole === 'admin' ? 'Activities Management' : 'Activities'}</h1>
-              <p>
-                {userRole === 'admin'
-                  ? 'Manage activities, participants and verification.'
-                  : 'Explore engagement opportunities and manage community activities.'}
-              </p>
+             <h1>
+  {(userRole === 'admin' || userRole === 'partner')
+    ? 'Activities Management'
+    : 'Activities'}
+</h1>
+
+<p>
+  {(userRole === 'admin' || userRole === 'partner')
+    ? 'Manage activities, participants and verification.'
+    : 'Explore engagement opportunities and manage community activities.'}
+</p>
             </div>
 
-            {userRole === 'admin' && (
+           {(userRole === 'admin' || userRole === 'partner') && (
               <button
                 type="button"
                 className="add-activity-btn"
@@ -363,7 +376,7 @@ function ActivitiesPage() {
           </section>
 
           <div className="member-tabs">
-            {userRole === 'admin' ? (
+          {(userRole === 'admin' || userRole === 'partner') ? (
               <>
                 <button
                   className={adminActivityTab === 'active' ? 'member-tab active' : 'member-tab'}
@@ -470,7 +483,7 @@ function ActivitiesPage() {
                   </div>
                 </div>
 
-                {userRole === 'admin' ? (
+             {(userRole === 'admin' || userRole === 'partner') ? (
                   <div className="admin-card-actions">
                     {activity.status === 'cancelled' ? (
                       <button
@@ -567,7 +580,7 @@ function ActivitiesPage() {
             ))}
           </div>
 
-          {userRole !== 'admin' && (
+        {userRole === 'community_member' && (
             <>
               <div className="how-it-works">
                 <div><b>① Register</b><span>Auto-approved instantly</span></div>

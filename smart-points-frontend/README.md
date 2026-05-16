@@ -10,6 +10,12 @@ npm start
 processMonthlyRankDecay();
 
 
+DELETE FROM point_transactions
+WHERE source_type = 'bonus'
+  AND notes LIKE 'Monthly rank decay:%'
+  AND notes LIKE CONCAT('%(', DATE_FORMAT(CURDATE(), '%Y-%m'), ')%');
+
+
 
 
 

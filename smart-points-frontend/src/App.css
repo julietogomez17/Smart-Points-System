@@ -3664,3 +3664,280 @@ button {
     justify-content: center;
   }
 }
+
+
+/* ============================= */
+/* ADMIN APPROVAL QUEUE */
+/* ============================= */
+
+.approval-page-shell {
+  max-width: 1180px;
+}
+
+.approval-header {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 26px 30px;
+  margin-bottom: 22px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.approval-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.approval-header p {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.approval-refresh-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 13px 22px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.24);
+}
+
+.approval-refresh-btn:hover {
+  background: #1d4ed8;
+}
+
+.approval-tabs-summary {
+  display: flex;
+  gap: 14px;
+  margin: 0 0 22px;
+  flex-wrap: wrap;
+}
+
+.approval-summary-pill {
+  background: #e5e7eb;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 14px 24px;
+  font-weight: 900;
+}
+
+.approval-summary-pill.active {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
+}
+
+.approval-section-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 22px;
+  margin-bottom: 22px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  border: 1px solid #eef2f7;
+}
+
+.approval-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.approval-section-header h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.approval-section-header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.approval-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.approval-row {
+  display: grid;
+  grid-template-columns: 2.1fr 0.95fr 0.8fr 0.75fr 0.95fr 1.15fr;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.approval-row:last-child {
+  border-bottom: none;
+}
+
+.approval-main-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.approval-image-box {
+  width: 92px;
+  height: 58px;
+  min-width: 92px;
+  border-radius: 10px;
+  background: #eef2ff;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  border: 1px solid #e5e7eb;
+}
+
+.approval-image-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.approval-main-cell h3 {
+  margin: 0 0 5px;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.approval-main-cell p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.approval-category-pill {
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.approval-category-pill.activity {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.approval-info-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.approval-info-cell strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.approval-info-cell span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.approval-info-cell.green strong {
+  color: #15803d;
+}
+
+.approval-action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.approval-approve-btn,
+.approval-reject-btn {
+  border-radius: 10px;
+  padding: 11px 18px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  transition: 0.2s ease;
+}
+
+.approval-approve-btn {
+  background: #16a34a;
+}
+
+.approval-approve-btn:hover {
+  background: #15803d;
+}
+
+.approval-reject-btn {
+  background: #ef4444;
+}
+
+.approval-reject-btn:hover {
+  background: #dc2626;
+}
+
+.approval-empty-state {
+  text-align: center;
+  padding: 46px 20px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+}
+
+.approval-empty-state div {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #16a34a;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.approval-empty-state h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.approval-empty-state p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-weight: 600;
+}
+
+@media (max-width: 1050px) {
+  .approval-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .approval-action-cell {
+    justify-content: flex-start;
+  }
+
+  .approval-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -444,23 +444,7 @@ function DashboardPage() {
 
   const renderPartnerDashboard = () => (
     <>
-      <section className="summary-grid member-grid">
-        <div className="summary-card">
-          <h3>My Organization</h3>
-          <p>{user?.partner_name || 'N/A'}</p>
-        </div>
-
-        <div className="summary-card">
-          <h3>My Rewards</h3>
-          <p>Manage rewards you created</p>
-        </div>
-
-        <div className="summary-card">
-          <h3>Redemptions</h3>
-          <p>Track redeemed items</p>
-        </div>
-      </section>
-
+     
       <section className="feature-section">
         <h2 className="section-title">Partner Tools</h2>
 
@@ -658,19 +642,14 @@ function DashboardPage() {
               </>
             )}
 
-            {user?.role === 'partner' && (
-              <>
-                <div className="stat-card">
-                  <p>My Rewards</p>
-                  <h3>—</h3>
-                </div>
-
-                <div className="stat-card">
-                  <p>Redemptions</p>
-                  <h3>—</h3>
-                </div>
-              </>
-            )}
+          {user?.role === 'partner' && (
+  <>
+    <div className="stat-card">
+      <p>My Organization</p>
+      <h3>{user?.partner_name || 'N/A'}</h3>
+    </div>
+  </>
+)}
           </div>
         </div>
 

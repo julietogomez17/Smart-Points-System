@@ -84,14 +84,7 @@ function Navbar() {
           </Link>
         )}
 
-        {user?.role === 'partner' && (
-          <Link
-            to="/admin/create-reward"
-            className={isActive('/admin/create-reward') ? 'nav-link active' : 'nav-link'}
-          >
-            Create Reward
-          </Link>
-        )}
+      
 
         {user?.role === 'admin' && (
           <>
@@ -101,7 +94,7 @@ function Navbar() {
               to="/admin/pending-rewards"
               className={isActive('/admin/pending-rewards') ? 'nav-link active' : 'nav-link'}
             >
-              Pending Rewards
+              Partners
             </Link>
 
             <Link

@@ -3,12 +3,14 @@ import api from '../services/api';
 
 function PendingRewardsPage() {
   const [rewards, setRewards] = useState([]);
+  const [activities, setActivities] = useState([]);
+
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
-    fetchPendingRewards();
+    fetchApprovalQueue();
   }, []);
 
   useEffect(() => {
@@ -25,46 +27,80 @@ function PendingRewardsPage() {
     return () => clearTimeout(timer);
   }, [showToast]);
 
+  const showMessage = (text, type) => {
+    setMessage(text);
+    setMessageType(type);
+    setShowToast(true);
+  };
+
+  const fetchApprovalQueue = async () => {
+    await Promise.all([fetchPendingRewards(), fetchPendingActivities()]);
+  };
+
   const fetchPendingRewards = async () => {
     try {
       const res = await api.get('/rewards/pending/list');
       setRewards(res.data.rewards || []);
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Failed to load pending rewards');
-      setMessageType('error');
-      setShowToast(true);
+      showMessage(error.response?.data?.message || 'Failed to load pending rewards', 'error');
     }
   };
 
-  const handleApprove = async (id) => {
+  const fetchPendingActivities = async () => {
+    try {
+      const res = await api.get('/activities');
+      const allActivities = res.data.activities || [];
+      const pendingActivities = allActivities.filter(
+        (activity) => activity.status === 'pending'
+      );
+
+      setActivities(pendingActivities);
+    } catch (error) {
+      showMessage(error.response?.data?.message || 'Failed to load pending activities', 'error');
+    }
+  };
+
+  const handleApproveReward = async (id) => {
     try {
       const res = await api.post(`/rewards/${id}/approve`);
-      setMessage(res.data.message || 'Reward approved successfully');
-      setMessageType('success');
-      setShowToast(true);
-      fetchPendingRewards();
+      showMessage(res.data.message || 'Reward approved successfully', 'success');
+      fetchApprovalQueue();
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Failed to approve reward');
-      setMessageType('error');
-      setShowToast(true);
+      showMessage(error.response?.data?.message || 'Failed to approve reward', 'error');
     }
   };
 
-  const handleReject = async (id) => {
+  const handleRejectReward = async (id) => {
     try {
       const res = await api.post(`/rewards/${id}/reject`);
-      setMessage(res.data.message || 'Reward rejected successfully');
-      setMessageType('success');
-      setShowToast(true);
-      fetchPendingRewards();
+      showMessage(res.data.message || 'Reward rejected successfully', 'success');
+      fetchApprovalQueue();
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Failed to reject reward');
-      setMessageType('error');
-      setShowToast(true);
+      showMessage(error.response?.data?.message || 'Failed to reject reward', 'error');
     }
   };
 
-  const getRewardImageUrl = (imageUrl) => {
+  const handleApproveActivity = async (id) => {
+    try {
+      const res = await api.put(`/activities/${id}/approve`);
+      showMessage(res.data.message || 'Activity approved successfully', 'success');
+      fetchApprovalQueue();
+    } catch (error) {
+      showMessage(error.response?.data?.message || 'Failed to approve activity', 'error');
+    }
+  };
+
+  const handleRejectActivity = async (id) => {
+    try {
+      const res = await api.put(`/activities/${id}/reject`);
+      showMessage(res.data.message || 'Activity rejected successfully', 'success');
+      fetchApprovalQueue();
+    } catch (error) {
+      showMessage(error.response?.data?.message || 'Failed to reject activity', 'error');
+    }
+  };
+
+  const getImageUrl = (imageUrl) => {
     if (!imageUrl) return null;
 
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
@@ -74,8 +110,18 @@ function PendingRewardsPage() {
     return `http://localhost:5000/${imageUrl}`;
   };
 
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
   return (
-    <div className="page-shell pending-rewards-shell">
+    <div className="page-shell approval-page-shell">
       {showToast && (
         <div className="floating-toast-wrap">
           <div
@@ -97,99 +143,177 @@ function PendingRewardsPage() {
         </div>
       )}
 
-      <section className="pending-rewards-panel">
-        <div className="pending-rewards-header">
-          <div>
-            <h1>Pending Rewards</h1>
-            <p>Review partner-submitted rewards before making them available.</p>
-          </div>
+      <div className="approval-header">
+        <div>
+          <h1>Admin Approval Queue</h1>
+          <p>Review partner-submitted rewards and activities before publishing them.</p>
+        </div>
 
-          <button className="pending-refresh-btn" onClick={fetchPendingRewards}>
-            Refresh
-          </button>
+        <button className="approval-refresh-btn" onClick={fetchApprovalQueue}>
+          Refresh
+        </button>
+      </div>
+
+      <div className="approval-tabs-summary">
+        <span className="approval-summary-pill active">
+          Pending Rewards ({rewards.length})
+        </span>
+
+        <span className="approval-summary-pill">
+          Pending Activities ({activities.length})
+        </span>
+      </div>
+
+      <section className="approval-section-card">
+        <div className="approval-section-header">
+          <div>
+            <h2>Pending Rewards</h2>
+            <p>Partner-submitted rewards waiting for admin approval.</p>
+          </div>
         </div>
 
         {rewards.length === 0 ? (
-          <div className="pending-empty-state">
-            <div className="pending-empty-icon">✓</div>
+          <div className="approval-empty-state">
+            <div>✓</div>
             <h3>No pending rewards</h3>
-            <p>There are no rewards waiting for admin approval.</p>
+            <p>There are no rewards waiting for approval.</p>
           </div>
         ) : (
-          <div className="pending-table-wrap">
-            <div className="pending-table-header">
-              <span>Reward</span>
-              <span>Category</span>
-              <span>Points Cost</span>
-              <span>Stock</span>
-              <span>Partner</span>
-              <span>Action</span>
-            </div>
+          <div className="approval-table">
+            {rewards.map((reward) => {
+              const imageUrl = getImageUrl(reward.image_url);
 
-            <div className="pending-table-body">
-              {rewards.map((reward) => {
-                const imageUrl = getRewardImageUrl(reward.image_url);
-
-                return (
-                  <div className="pending-table-row" key={reward.reward_id}>
-                    <div className="pending-reward-cell">
-                      <div className="pending-reward-img">
-                        {imageUrl ? (
-                          <img src={imageUrl} alt={reward.reward_name} />
-                        ) : (
-                          <span>🎁</span>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="pending-title-row">
-                          <h3>{reward.reward_name || 'Untitled Reward'}</h3>
-                          <span className="pending-status-pill">
-                            {reward.availability_status || 'pending'}
-                          </span>
-                        </div>
-
-                        <p>{reward.description || 'No description provided'}</p>
-                      </div>
+              return (
+                <div className="approval-row" key={`reward-${reward.reward_id}`}>
+                  <div className="approval-main-cell">
+                    <div className="approval-image-box">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={reward.reward_name} />
+                      ) : (
+                        <span>🎁</span>
+                      )}
                     </div>
 
-                    <div className="pending-category-cell">
-                      <strong>{reward.category || 'N/A'}</strong>
-                    </div>
-
-                    <div className="pending-points-cell">
-                      <strong>{Number(reward.points_cost || 0).toLocaleString()}</strong>
-                      <span>points</span>
-                    </div>
-
-                    <div className="pending-stock-cell">
-                      <strong>{Number(reward.stock || 0).toLocaleString()}</strong>
-                      <span>available</span>
-                    </div>
-
-                    <div className="pending-partner-cell">
-                      <strong>{reward.partner_name || 'N/A'}</strong>
-                    </div>
-
-                    <div className="pending-action-cell">
-                      <button
-                        className="pending-approve-btn"
-                        onClick={() => handleApprove(reward.reward_id)}
-                      >
-                        Approve
-                      </button>
-
-                      <button
-                        className="pending-reject-btn"
-                        onClick={() => handleReject(reward.reward_id)}
-                      >
-                        Reject
-                      </button>
+                    <div>
+                      <h3>{reward.reward_name || 'Untitled Reward'}</h3>
+                      <p>{reward.description || 'No description provided.'}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="approval-category-pill">
+                    {reward.category || 'No Category'}
+                  </div>
+
+                  <div className="approval-info-cell">
+                    <strong>{Number(reward.points_cost || 0).toLocaleString()} pts</strong>
+                    <span>Points Cost</span>
+                  </div>
+
+                  <div className="approval-info-cell green">
+                    <strong>{Number(reward.stock || 0).toLocaleString()}</strong>
+                    <span>Stock</span>
+                  </div>
+
+                  <div className="approval-info-cell">
+                    <strong>{reward.partner_name || 'N/A'}</strong>
+                    <span>Partner</span>
+                  </div>
+
+                  <div className="approval-action-cell">
+                    <button
+                      className="approval-approve-btn"
+                      onClick={() => handleApproveReward(reward.reward_id)}
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      className="approval-reject-btn"
+                      onClick={() => handleRejectReward(reward.reward_id)}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="approval-section-card">
+        <div className="approval-section-header">
+          <div>
+            <h2>Pending Activities</h2>
+            <p>Partner-created activities waiting for admin approval.</p>
+          </div>
+        </div>
+
+        {activities.length === 0 ? (
+          <div className="approval-empty-state">
+            <div>✓</div>
+            <h3>No pending activities</h3>
+            <p>There are no activities waiting for approval.</p>
+          </div>
+        ) : (
+          <div className="approval-table">
+            {activities.map((activity) => {
+              const imageUrl = getImageUrl(activity.image_url);
+
+              return (
+                <div className="approval-row" key={`activity-${activity.activity_id}`}>
+                  <div className="approval-main-cell">
+                    <div className="approval-image-box">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={activity.title} />
+                      ) : (
+                        <span>📌</span>
+                      )}
+                    </div>
+
+                    <div>
+                      <h3>{activity.title || 'Untitled Activity'}</h3>
+                      <p>{activity.description || 'No description provided.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="approval-category-pill activity">
+                    {activity.category || 'No Category'}
+                  </div>
+
+                  <div className="approval-info-cell">
+                    <strong>{Number(activity.points_value || 0).toLocaleString()} pts</strong>
+                    <span>Points</span>
+                  </div>
+
+                  <div className="approval-info-cell green">
+                    <strong>{activity.capacity || '∞'}</strong>
+                    <span>Capacity</span>
+                  </div>
+
+                  <div className="approval-info-cell">
+                    <strong>{formatDate(activity.date_start)}</strong>
+                    <span>Start Date</span>
+                  </div>
+
+                  <div className="approval-action-cell">
+                    <button
+                      className="approval-approve-btn"
+                      onClick={() => handleApproveActivity(activity.activity_id)}
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      className="approval-reject-btn"
+                      onClick={() => handleRejectActivity(activity.activity_id)}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
