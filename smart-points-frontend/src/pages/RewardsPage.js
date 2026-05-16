@@ -40,13 +40,14 @@ function RewardsPage() {
   const user = JSON.parse(localStorage.getItem('user'));
   const userPoints = Number(user?.points_balance || 0);
 
-// eslint-disable-next-line react-hooks/exhaustive-deps
 useEffect(() => {
   fetchRewards();
 
   if (user?.role === 'admin') {
     fetchPartners();
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
   useEffect(() => {
