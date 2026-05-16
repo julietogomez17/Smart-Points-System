@@ -327,7 +327,7 @@ function ActivitiesPage() {
     });
   };
 
-const isManager = userRole === 'admin' || userRole === 'partner';
+
 
 const activeActivities =
   userRole === 'admin'

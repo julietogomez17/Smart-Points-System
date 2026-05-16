@@ -9,9 +9,10 @@ function PendingRewardsPage() {
   const [messageType, setMessageType] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  useEffect(() => {
-    fetchApprovalQueue();
-  }, []);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+useEffect(() => {
+  fetchApprovalQueue();
+}, []);
 
   useEffect(() => {
     let timer;
