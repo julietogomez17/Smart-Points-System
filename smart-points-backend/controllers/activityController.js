@@ -24,50 +24,59 @@ const getAllActivities = (req, res) => {
       a.created_by,
       a.created_at,
 
-
-
       (
-  SELECT COUNT(*)
-  FROM activity_registrations ar2
-  WHERE ar2.activity_id = a.activity_id
-    AND ar2.registration_status = 'registered'
-) AS joined_count,
+        SELECT COUNT(*)
+        FROM activity_registrations ar2
+        WHERE ar2.activity_id = a.activity_id
+          AND ar2.registration_status = 'registered'
+      ) AS joined_count,
 
-      
       CASE 
         WHEN ar.user_id IS NOT NULL THEN true
         ELSE false
       END AS is_joined,
 
       ar.registration_status,
-COALESCE(pr.status, 'pending') AS participation_status,
-pr.ai_reason AS rejection_reason,
-COALESCE(pr.awarded_points, 0) AS awarded_points
+      COALESCE(pr.status, 'pending') AS participation_status,
+      pr.ai_reason AS rejection_reason,
+      COALESCE(pr.awarded_points, 0) AS awarded_points
 
     FROM activities a
     LEFT JOIN partners p ON a.partner_id = p.partner_id
 
-    -- 🔥 JOIN USER REGISTRATION
     LEFT JOIN activity_registrations ar 
       ON ar.activity_id = a.activity_id 
       AND ar.user_id = ?
 
-
-      LEFT JOIN participation_records pr
-  ON pr.activity_id = a.activity_id
-  AND pr.user_id = ?`
-  ;
-
-if (userRole !== 'admin') {
-  sql += `
-    WHERE a.status != 'cancelled'
-       OR ar.user_id IS NOT NULL
+    LEFT JOIN participation_records pr
+      ON pr.activity_id = a.activity_id
+      AND pr.user_id = ?
   `;
-}
 
-sql += ` ORDER BY a.date_start DESC `;
+  if (userRole === 'admin') {
+    // Admin can see all activities including pending/cancelled.
+} else if (userRole === 'partner') {
+  // Partner can only see activities they created.
+  sql += `
+    WHERE a.created_by = ?
+  `;
+}else {
+    // Community members should only see approved/open activities,
+    // plus activities they already joined.
+    sql += `
+      WHERE a.status = 'open'
+         OR ar.user_id IS NOT NULL
+    `;
+  }
 
- db.query(sql, [userId, userId], (err, results) => {
+  sql += ` ORDER BY a.date_start DESC `;
+
+  const params =
+    userRole === 'partner'
+      ? [userId, userId, userId]
+      : [userId, userId];
+
+  db.query(sql, params, (err, results) => {
     if (err) {
       return res.status(500).json({
         success: false,
@@ -83,6 +92,7 @@ sql += ` ORDER BY a.date_start DESC `;
     });
   });
 };
+
 // GET SINGLE ACTIVITY
 const getActivityById = (req, res) => {
   const { id } = req.params;
@@ -100,7 +110,7 @@ const getActivityById = (req, res) => {
       a.capacity,
       a.validation_type,
       a.status,
-     image_url = COALESCE(?, image_url),
+      a.image_url,
       a.partner_id,
       p.organization_name AS partner_name,
       a.created_by,
@@ -126,9 +136,33 @@ const getActivityById = (req, res) => {
       });
     }
 
+    const activity = results[0];
+
+    if (
+      req.user.role !== 'admin' &&
+      req.user.role !== 'partner' &&
+      activity.status !== 'open'
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This activity is not available.'
+      });
+    }
+
+    if (
+      req.user.role === 'partner' &&
+      activity.status === 'pending' &&
+      Number(activity.created_by) !== Number(req.user.user_id)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view your own pending activities.'
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      activity: results[0]
+      activity
     });
   });
 };
@@ -158,15 +192,30 @@ const createActivity = (req, res) => {
   }
 
   const allowedValidationTypes = ['manual', 'qr', 'proof_upload'];
-  const allowedStatuses = ['draft', 'open', 'closed', 'completed', 'cancelled'];
+  const allowedStatuses = ['draft', 'pending', 'open', 'closed', 'completed', 'cancelled'];
 
   const finalValidationType = allowedValidationTypes.includes(validation_type)
     ? validation_type
     : 'manual';
 
-  const finalStatus = allowedStatuses.includes(status)
-    ? status
-    : 'draft';
+  // Important:
+  // Partner-created activities must wait for admin approval.
+  // Admin-created activities can be open immediately.
+  const finalStatus =
+    req.user.role === 'partner'
+      ? 'pending'
+      : allowedStatuses.includes(status)
+        ? status
+        : 'open';
+
+  const finalPartnerId =
+    partner_id === '' ||
+    partner_id === undefined ||
+    partner_id === null ||
+    Number(partner_id) === 0 ||
+    Number.isNaN(Number(partner_id))
+      ? null
+      : Number(partner_id);
 
   const sql = `
     INSERT INTO activities (
@@ -200,13 +249,7 @@ const createActivity = (req, res) => {
       capacity === '' || capacity === undefined ? null : Number(capacity),
       finalValidationType,
       finalStatus,
-    partner_id === '' ||
-partner_id === undefined ||
-partner_id === null ||
-Number(partner_id) === 0 ||
-Number.isNaN(Number(partner_id))
-  ? null
-  : Number(partner_id),
+      finalPartnerId,
       image_url || null,
       req.user.user_id
     ],
@@ -219,10 +262,29 @@ Number.isNaN(Number(partner_id))
         });
       }
 
+      db.query(
+        `INSERT INTO audit_logs 
+         (actor_user_id, action_type, entity_type, entity_id, details)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          req.user.user_id,
+          'CREATE',
+          'activity',
+          result.insertId,
+          req.user.role === 'partner'
+            ? `Partner submitted activity for approval: ${title}`
+            : `Admin created activity: ${title}`
+        ]
+      );
+
       return res.status(201).json({
         success: true,
-        message: 'Activity created successfully',
-        activity_id: result.insertId
+        message:
+          req.user.role === 'partner'
+            ? 'Activity submitted successfully and is waiting for admin approval'
+            : 'Activity created successfully',
+        activity_id: result.insertId,
+        status: finalStatus
       });
     }
   );
@@ -243,174 +305,96 @@ const updateActivity = (req, res) => {
     capacity,
     validation_type,
     status,
-    partner_id,
     image_url
   } = req.body;
 
   const allowedValidationTypes = ['manual', 'qr', 'proof_upload'];
-  const allowedStatuses = ['draft', 'open', 'closed', 'completed', 'cancelled'];
+  const allowedStatuses = ['draft', 'pending', 'open', 'closed', 'completed', 'cancelled'];
 
   const finalValidationType = allowedValidationTypes.includes(validation_type)
     ? validation_type
     : 'manual';
 
-  const finalStatus = allowedStatuses.includes(status)
-    ? status
-    : 'draft';
-
-  const sql = `
-    UPDATE activities
-    SET
-      title = ?,
-      description = ?,
-      category = ?,
-      location = ?,
-      date_start = ?,
-      date_end = ?,
-      points_value = ?,
-      capacity = ?,
-      validation_type = ?,
-      status = ?,
-
-      image_url = ?
+  const checkSql = `
+    SELECT activity_id, title, created_by, status
+    FROM activities
     WHERE activity_id = ?
   `;
 
-  db.query(
-    sql,
-    [
-      title,
-      description || null,
-      category || null,
-      location || null,
-      date_start,
-      date_end || null,
-      Number(points_value),
-      capacity === '' || capacity === undefined ? null : Number(capacity),
-      finalValidationType,
-      finalStatus,
-     
-      image_url || null,
-      id
-    ],
-    (err, result) => {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to update activity',
-          error: err.message
-        });
-      }
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Activity not found'
-        });
-      }
-
-
-
-      db.query(
-  `INSERT INTO audit_logs 
-   (actor_user_id, action_type, entity_type, entity_id, details)
-   VALUES (?, ?, ?, ?, ?)`,
-  [
-    req.user.user_id,
-    'UPDATE',
-    'activity',
-    id,
-    `Updated activity: ${title}`
-  ]
-);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Activity updated successfully'
-      });
-
-
-    }
-  );
-};
-
-// DELETE / CANCEL ACTIVITY
-const deleteActivity = (req, res) => {
-  const { id } = req.params;
-
-  const checkSql = `
-    SELECT 
-      (SELECT COUNT(*) FROM activity_registrations WHERE activity_id = ?) AS registration_count,
-      (SELECT COUNT(*) FROM participation_records WHERE activity_id = ?) AS participation_count
-  `;
-
-  db.query(checkSql, [id, id], (checkErr, checkResults) => {
+  db.query(checkSql, [id], (checkErr, checkResults) => {
     if (checkErr) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to check activity references',
+        message: 'Failed to check activity',
         error: checkErr.message
       });
     }
 
-    const { registration_count, participation_count } = checkResults[0];
-
-    if (registration_count > 0 || participation_count > 0) {
-      const softDeleteSql = `
-        UPDATE activities
-        SET status = 'cancelled'
-        WHERE activity_id = ?
-      `;
-
-      db.query(softDeleteSql, [id], (softErr, softResult) => {
-        if (softErr) {
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to cancel activity',
-            error: softErr.message
-          });
-        }
-
-        if (softResult.affectedRows === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'Activity not found'
-          });
-        }
-
-
- //  AUDIT LOG
-db.query(
-  `INSERT INTO audit_logs 
-   (actor_user_id, action_type, entity_type, entity_id, details)
-   VALUES (?, ?, ?, ?, ?)`,
-  [
-    req.user.user_id,
-    'CANCEL',
-    'activity',
-    id,
-    'Cancelled activity'
-  ]
-);
-
-
-
-
-        return res.status(200).json({
-          success: true,
-          message: 'Activity is already in use, so it was marked as cancelled instead of being deleted'
-        });
-
-       
-
-
+    if (checkResults.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Activity not found'
       });
-    } else {
-      db.query('DELETE FROM activities WHERE activity_id = ?', [id], (err, result) => {
+    }
+
+    const activity = checkResults[0];
+
+    if (
+      req.user.role === 'partner' &&
+      Number(activity.created_by) !== Number(req.user.user_id)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only edit your own activities.'
+      });
+    }
+
+    // If partner edits an activity, send it back to pending for admin review.
+    const finalStatus =
+      req.user.role === 'partner'
+        ? 'pending'
+        : allowedStatuses.includes(status)
+          ? status
+          : 'draft';
+
+    const sql = `
+      UPDATE activities
+      SET
+        title = ?,
+        description = ?,
+        category = ?,
+        location = ?,
+        date_start = ?,
+        date_end = ?,
+        points_value = ?,
+        capacity = ?,
+        validation_type = ?,
+        status = ?,
+        image_url = ?
+      WHERE activity_id = ?
+    `;
+
+    db.query(
+      sql,
+      [
+        title,
+        description || null,
+        category || null,
+        location || null,
+        date_start,
+        date_end || null,
+        Number(points_value),
+        capacity === '' || capacity === undefined ? null : Number(capacity),
+        finalValidationType,
+        finalStatus,
+        image_url || null,
+        id
+      ],
+      (err, result) => {
         if (err) {
           return res.status(500).json({
             success: false,
-            message: 'Failed to delete activity',
+            message: 'Failed to update activity',
             error: err.message
           });
         }
@@ -422,12 +406,246 @@ db.query(
           });
         }
 
+        db.query(
+          `INSERT INTO audit_logs 
+           (actor_user_id, action_type, entity_type, entity_id, details)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            req.user.user_id,
+            'UPDATE',
+            'activity',
+            id,
+            req.user.role === 'partner'
+              ? `Partner updated activity and sent it back to pending review: ${title}`
+              : `Updated activity: ${title}`
+          ]
+        );
+
         return res.status(200).json({
           success: true,
-          message: 'Activity deleted successfully'
+          message:
+            req.user.role === 'partner'
+              ? 'Activity updated and sent back for admin approval'
+              : 'Activity updated successfully',
+          status: finalStatus
         });
+      }
+    );
+  });
+};
+
+// APPROVE PARTNER ACTIVITY
+const approveActivity = (req, res) => {
+  const { id } = req.params;
+
+  const sql = `
+    UPDATE activities
+    SET status = 'open'
+    WHERE activity_id = ?
+  `;
+
+  db.query(sql, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to approve activity',
+        error: err.message
       });
     }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Activity not found'
+      });
+    }
+
+    db.query(
+      `INSERT INTO audit_logs 
+       (actor_user_id, action_type, entity_type, entity_id, details)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        req.user.user_id,
+        'APPROVE',
+        'activity',
+        id,
+        'Approved partner-submitted activity'
+      ]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Activity approved successfully'
+    });
+  });
+};
+
+// REJECT PARTNER ACTIVITY
+const rejectActivity = (req, res) => {
+  const { id } = req.params;
+
+  const sql = `
+    UPDATE activities
+    SET status = 'cancelled'
+    WHERE activity_id = ?
+  `;
+
+  db.query(sql, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to reject activity',
+        error: err.message
+      });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Activity not found'
+      });
+    }
+
+    db.query(
+      `INSERT INTO audit_logs 
+       (actor_user_id, action_type, entity_type, entity_id, details)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        req.user.user_id,
+        'REJECT',
+        'activity',
+        id,
+        'Rejected partner-submitted activity'
+      ]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Activity rejected successfully'
+    });
+  });
+};
+
+// DELETE / CANCEL ACTIVITY
+const deleteActivity = (req, res) => {
+  const { id } = req.params;
+
+  const ownerSql = `
+    SELECT activity_id, created_by
+    FROM activities
+    WHERE activity_id = ?
+  `;
+
+  db.query(ownerSql, [id], (ownerErr, ownerResults) => {
+    if (ownerErr) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to check activity owner',
+        error: ownerErr.message
+      });
+    }
+
+    if (ownerResults.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Activity not found'
+      });
+    }
+
+    const activity = ownerResults[0];
+
+    if (
+      req.user.role === 'partner' &&
+      Number(activity.created_by) !== Number(req.user.user_id)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only deactivate your own activities.'
+      });
+    }
+
+    const checkSql = `
+      SELECT 
+        (SELECT COUNT(*) FROM activity_registrations WHERE activity_id = ?) AS registration_count,
+        (SELECT COUNT(*) FROM participation_records WHERE activity_id = ?) AS participation_count
+    `;
+
+    db.query(checkSql, [id, id], (checkErr, checkResults) => {
+      if (checkErr) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to check activity references',
+          error: checkErr.message
+        });
+      }
+
+      const { registration_count, participation_count } = checkResults[0];
+
+      if (registration_count > 0 || participation_count > 0) {
+        const softDeleteSql = `
+          UPDATE activities
+          SET status = 'cancelled'
+          WHERE activity_id = ?
+        `;
+
+        db.query(softDeleteSql, [id], (softErr, softResult) => {
+          if (softErr) {
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to cancel activity',
+              error: softErr.message
+            });
+          }
+
+          if (softResult.affectedRows === 0) {
+            return res.status(404).json({
+              success: false,
+              message: 'Activity not found'
+            });
+          }
+
+          db.query(
+            `INSERT INTO audit_logs 
+             (actor_user_id, action_type, entity_type, entity_id, details)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              req.user.user_id,
+              'CANCEL',
+              'activity',
+              id,
+              'Cancelled activity'
+            ]
+          );
+
+          return res.status(200).json({
+            success: true,
+            message: 'Activity is already in use, so it was marked as cancelled instead of being deleted'
+          });
+        });
+      } else {
+        db.query('DELETE FROM activities WHERE activity_id = ?', [id], (err, result) => {
+          if (err) {
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to delete activity',
+              error: err.message
+            });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({
+              success: false,
+              message: 'Activity not found'
+            });
+          }
+
+          return res.status(200).json({
+            success: true,
+            message: 'Activity deleted successfully'
+          });
+        });
+      }
+    });
   });
 };
 
@@ -526,6 +744,8 @@ module.exports = {
   getActivityById,
   createActivity,
   updateActivity,
+  approveActivity,
+  rejectActivity,
   deleteActivity,
   joinActivity
 };

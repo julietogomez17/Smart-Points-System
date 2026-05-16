@@ -6,6 +6,8 @@ const {
   getActivityById,
   createActivity,
   updateActivity,
+  approveActivity,
+  rejectActivity,
   deleteActivity,
   joinActivity
 } = require('../controllers/activityController');
@@ -21,21 +23,35 @@ router.get('/:id', verifyToken, getActivityById);
 router.post(
   '/',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'partner'),
   createActivity
 );
 
 router.put(
   '/:id',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'partner'),
   updateActivity
+);
+
+router.put(
+  '/:id/approve',
+  verifyToken,
+  authorizeRoles('admin'),
+  approveActivity
+);
+
+router.put(
+  '/:id/reject',
+  verifyToken,
+  authorizeRoles('admin'),
+  rejectActivity
 );
 
 router.delete(
   '/:id',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'partner'),
   deleteActivity
 );
 

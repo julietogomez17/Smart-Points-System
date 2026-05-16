@@ -26,9 +26,9 @@ router.post(
 );
 
 router.get(
-  '/activity/:id',
+  '/activity/:activityId',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'partner'),
   getParticipantsByActivity
 );
 
