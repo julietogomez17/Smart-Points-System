@@ -327,8 +327,6 @@ function ActivitiesPage() {
     });
   };
 
-
-
 const activeActivities =
   userRole === 'admin'
     ? activities.filter((a) =>
