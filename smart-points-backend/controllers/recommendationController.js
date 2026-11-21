@@ -1,136 +1,80 @@
-const db = require('../config/db');
+const {
+  getRewardRecommendations: getAIRecommendations
+} = require('../services/aiService');
 
-const getRewardRecommendations = (req, res) => {
-  const userId = req.user.user_id;
+const getRewardRecommendations = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
 
-  const userSql = `
-    SELECT user_id, points_balance
-    FROM users
-    WHERE user_id = ?
-  `;
+    console.log(
+      'REQUESTING AI RECOMMENDATIONS FOR USER:',
+      userId
+    );
 
-  db.query(userSql, [userId], (userErr, userResults) => {
-    if (userErr) {
+    const aiResponse = await getAIRecommendations(userId);
+
+    console.log(
+      'AI RECOMMENDATION RESPONSE:',
+      JSON.stringify(aiResponse, null, 2)
+    );
+
+    if (
+      !aiResponse ||
+      aiResponse.success !== true ||
+      !aiResponse.data
+    ) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to fetch user data',
-        error: userErr.message
+        message: 'Invalid response from recommendation AI'
       });
     }
 
-    if (userResults.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    const data = aiResponse.data;
 
-    const user = userResults[0];
+    return res.status(200).json({
+      success: true,
 
-    const activityHistorySql = `
-      SELECT a.category, COUNT(*) AS total
-      FROM participation_records pr
-      INNER JOIN activities a ON pr.activity_id = a.activity_id
-      WHERE pr.user_id = ? AND pr.status = 'approved'
-      GROUP BY a.category
-      ORDER BY total DESC
-      LIMIT 1
-    `;
+      user_id: data.user_id,
 
-    db.query(activityHistorySql, [userId], (historyErr, historyResults) => {
-      if (historyErr) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to fetch activity history',
-          error: historyErr.message
-        });
-      }
+      current_points:
+        data.current_balance,
 
-      const favoriteCategory =
-        historyResults.length > 0 ? historyResults[0].category : null;
+      recommendation_method:
+        data.recommendation_method ||
+        'Content-Based Filtering with Cosine Similarity',
 
-      const rewardsSql = `
-        SELECT
-          r.reward_id,
-          r.reward_name,
-          r.description,
-          r.category,
-          r.points_cost,
-          r.stock,
-          r.availability_status,
-          p.organization_name AS partner_name
-        FROM rewards r
-        LEFT JOIN partners p ON r.partner_id = p.partner_id
-        WHERE r.availability_status = 'available'
-          AND r.stock > 0
-      `;
+      redemption_preferences:
+        data.redemption_preferences || {},
 
-      db.query(rewardsSql, (rewardErr, rewardResults) => {
-        if (rewardErr) {
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to fetch rewards',
-            error: rewardErr.message
-          });
-        }
+      activity_preferences:
+        data.activity_preferences || {},
 
-        const recommendations = rewardResults.map((reward) => {
-          const affordable = user.points_balance >= reward.points_cost;
-          const gap = reward.points_cost - user.points_balance;
+      redemption_history_count:
+        data.redemption_history_count || 0,
 
-          let reason = 'Currently in stock';
+      activity_history_count:
+        data.activity_history_count || 0,
 
-          if (affordable) {
-            reason = 'You can afford this reward now';
-          } else if (gap > 0) {
-            reason = `You need ${gap} more point${gap === 1 ? '' : 's'} to redeem this`;
-          }
+      category_preferences:
+        data.redemption_preferences || {},
 
-          if (
-            favoriteCategory &&
-            reward.category &&
-            reward.category.toLowerCase() === favoriteCategory.toLowerCase()
-          ) {
-            reason += '. Matches your activity history';
-          }
-
-          return {
-            reward_id: reward.reward_id,
-            reward_name: reward.reward_name,
-            description: reward.description,
-            category: reward.category,
-            points_cost: reward.points_cost,
-            stock: reward.stock,
-            partner_name: reward.partner_name,
-            affordable,
-            reason
-          };
-        });
-
-        recommendations.sort((a, b) => {
-          // 1. Affordable rewards first
-          if (a.affordable !== b.affordable) {
-            return a.affordable ? -1 : 1;
-          }
-
-          // 2. Lowest points cost first
-          if (a.points_cost !== b.points_cost) {
-            return a.points_cost - b.points_cost;
-          }
-
-          // 3. Higher stock first
-          return b.stock - a.stock;
-        });
-
-        return res.status(200).json({
-          success: true,
-          current_points: user.points_balance,
-          favorite_category: favoriteCategory,
-          recommendations
-        });
-      });
+      recommendations:
+        data.recommendations || []
     });
-  });
+
+  } catch (error) {
+    console.error(
+      'RECOMMENDATION CONTROLLER ERROR:',
+      error.response?.data || error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Failed to generate AI reward recommendations',
+      error: error.message
+    });
+  }
 };
 
 module.exports = {

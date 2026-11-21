@@ -18,3 +18,21 @@ Thumbs.db
 
 uploads/
 */uploads/
+# CitiPoints deployment exclusions
+**/.env
+**/.env.*
+!**/.env.example
+**/venv/
+**/.venv/
+**/__pycache__/
+**/.firebase/
+CITIPOINTS_AI/DATASETS/
+CITIPOINTS_AI/GPS_TEST_PHOTOS/
+CITIPOINTS_AI/SCREEN_DATASET/
+CITIPOINTS_AI/SCREEN_TEST_PHOTOS/
+CITIPOINTS_AI/ai_error.txt
+
+# Private testing files
+CITIPOINTS_AI/screen_training_mistakes.csv
+smart-points-backend/tests/test-back-id.jpg
+smart-points-backend/tests/test-front-id.jpg

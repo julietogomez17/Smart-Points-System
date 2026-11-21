@@ -21,12 +21,48 @@ const rewardRoutes = require('./routes/rewardRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const recommendationRoutes = require('./routes/recommendationRoutes');
 const partnerRoutes = require('./routes/partnerRoutes');
-
+const citizenProfileRoutes = require('./routes/citizenProfileRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const adminProfileRoutes = require('./routes/adminProfileRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:3000',
+  ...(process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [])
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: [
+      'GET',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS'
+    ],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization'
+    ],
+    credentials: true
+  })
+);
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -43,8 +79,7 @@ app.get('/api/test-db', (req, res) => {
     if (err) {
       return res.status(500).json({
         success: false,
-        message: 'Database query failed',
-        error: err.message
+message: 'Database query failed'
       });
     }
 
@@ -63,7 +98,11 @@ app.use('/api/rewards', rewardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/partners', partnerRoutes);
-
+app.use('/api/citizen', citizenProfileRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminProfileRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 const PORT = process.env.PORT || 5000;
 

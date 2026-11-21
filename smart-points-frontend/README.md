@@ -1,9 +1,11 @@
 # Getting Started with Create React App
 
 npm run dev
-cd smart-points-backend
+cd C:\Users\lylevan\OneDrive\Desktop\smart-points\smart-points\smart-points-backend
 
-cd smart-points-frontend
+
+
+cd C:\Users\lylevan\OneDrive\Desktop\smart-points\smart-points\smart-points-frontend
 npm start
 
 

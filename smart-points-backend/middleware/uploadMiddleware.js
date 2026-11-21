@@ -41,4 +41,84 @@ const uploadProof = multer({
   }
 });
 
-module.exports = { uploadProof };
+
+/* =====================================================
+   REWARD IMAGE UPLOAD
+   ===================================================== */
+
+const rewardUploadDir = path.join(
+  __dirname,
+  '../uploads/rewards'
+);
+
+if (!fs.existsSync(rewardUploadDir)) {
+  fs.mkdirSync(rewardUploadDir, {
+    recursive: true
+  });
+}
+
+const rewardStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, rewardUploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const uniqueName =
+      'reward-' +
+      Date.now() +
+      '-' +
+      Math.round(Math.random() * 1e9) +
+      path.extname(file.originalname).toLowerCase();
+
+    cb(null, uniqueName);
+  }
+});
+
+const rewardFileFilter = (req, file, cb) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ];
+
+  const allowedExtensions = [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp'
+  ];
+
+  const extension = path.extname(
+    file.originalname
+  ).toLowerCase();
+
+  if (
+    allowedMimeTypes.includes(file.mimetype) &&
+    allowedExtensions.includes(extension)
+  ) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        'Only JPG, PNG, and WebP reward images are allowed.'
+      )
+    );
+  }
+};
+
+const uploadRewardImage = multer({
+  storage: rewardStorage,
+  fileFilter: rewardFileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+});
+
+/* =====================================================
+   EXPORT BOTH UPLOAD MIDDLEWARES
+   ===================================================== */
+
+module.exports = {
+  uploadProof,
+  uploadRewardImage
+};

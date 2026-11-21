@@ -12,7 +12,8 @@ const {
 
 const {
   verifyToken,
-  authorizeRoles
+  authorizeRoles,
+  requireApprovedLguForActivities
 } = require('../middleware/authMiddleware');
 
 const { uploadProof } = require('../middleware/uploadMiddleware');
@@ -28,7 +29,7 @@ router.post(
 router.get(
   '/activity/:activityId',
   verifyToken,
-  authorizeRoles('admin', 'partner'),
+ authorizeRoles('admin', 'lgu'),
   getParticipantsByActivity
 );
 
@@ -42,21 +43,24 @@ router.get(
 router.get(
   '/review-queue',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'lgu'),
+  requireApprovedLguForActivities,
   getReviewQueue
 );
 
 router.post(
   '/:id/approve',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'lgu'),
+  requireApprovedLguForActivities,
   approveParticipation
 );
 
 router.post(
   '/:id/reject',
   verifyToken,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'lgu'),
+  requireApprovedLguForActivities,
   rejectParticipation
 );
 

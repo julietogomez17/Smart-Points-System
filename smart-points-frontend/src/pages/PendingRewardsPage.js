@@ -9,9 +9,38 @@ function PendingRewardsPage() {
   const [messageType, setMessageType] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-// eslint-disable-next-line react-hooks/exhaustive-deps
 useEffect(() => {
-  fetchApprovalQueue();
+  let cancelled = false;
+
+  const loadPendingData = async () => {
+    const results = await Promise.allSettled([
+      api.get('/rewards/pending/list'),
+      api.get('/activities')
+    ]);
+
+    if (cancelled) return;
+
+    if (results[0].status === 'fulfilled') {
+      setRewards(results[0].value.data.rewards || []);
+    } else {
+      console.error('Failed to load pending rewards', results[0].reason);
+    }
+
+    if (results[1].status === 'fulfilled') {
+      const allActivities = results[1].value.data.activities || [];
+      setActivities(
+        allActivities.filter((activity) => activity.status === 'pending')
+      );
+    } else {
+      console.error('Failed to load pending activities', results[1].reason);
+    }
+  };
+
+  loadPendingData();
+
+  return () => {
+    cancelled = true;
+  };
 }, []);
 
   useEffect(() => {
@@ -101,15 +130,18 @@ useEffect(() => {
     }
   };
 
-  const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return null;
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
 
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return imageUrl;
-    }
+  if (/^https?:\/\//i.test(imageUrl)) {
+    return imageUrl;
+  }
 
-    return `http://localhost:5000/${imageUrl}`;
-  };
+  const backendURL = api.defaults.baseURL.replace(/\/api\/?$/, '');
+  const path = imageUrl.replace(/^\/+/, '');
+
+  return `${backendURL}/${path}`;
+};
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
