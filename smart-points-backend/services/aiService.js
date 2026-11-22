@@ -33,15 +33,19 @@ async function checkFraudRisk(claimData, useGpsModel = false) {
     return response.data;
 
   } catch (error) {
-    console.error(
-      "CITIPOINTS FRAUD AI ERROR:",
-      error.response?.data || error.message
-    );
+    console.error("========== CITIPOINTS AI ERROR ==========");
+    console.error("AI URL:", `${AI_BASE_URL}${endpoint}`);
+    console.error("Error code:", error.code || "N/A");
+    console.error("HTTP status:", error.response?.status || "N/A");
+    console.error("Error message:", error.message);
+    console.error("AI response:", error.response?.data || "No response");
+    console.error("=========================================");
 
     throw new Error(
       "Unable to connect to CITIPOINTS fraud detection service."
     );
   }
+
 }
 
 // ==========================================
