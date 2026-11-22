@@ -1,29 +1,57 @@
 
-const nodemailer = require('nodemailer');
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: Number(process.env.SMTP_PORT || 465) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+const EMAIL_FROM =
+  process.env.RESEND_FROM_EMAIL || 'CitiPoints <onboarding@resend.dev>';
+
+const sendEmail = async (to, subject, message) => {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY is missing.');
   }
-});
+
+  const response = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: EMAIL_FROM,
+      to: [to],
+      subject,
+      text: message
+    }),
+    signal: AbortSignal.timeout(15000)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Resend email error (${response.status}): ${
+        result.message || 'Unknown error'
+      }`
+    );
+  }
+
+  return result;
+};
+
+// =====================================================
+// SEND EMAIL VERIFICATION OTP
+// =====================================================
 
 const sendVerificationEmail = async (email, otp) => {
   if (!/^\d{6}$/.test(String(otp))) {
     throw new Error('Invalid OTP format.');
   }
 
-  await transporter.sendMail({
-    from: {
-      name: 'CitiPoints',
-      address: process.env.SMTP_USER
-    },
-    to: email,
-    subject: 'CitiPoints - Verify Your Email',
-    text: [
+  return sendEmail(
+    email,
+    'CitiPoints - Verify Your Email',
+    [
       'Welcome to CitiPoints!',
       '',
       `Your verification code is: ${otp}`,
@@ -34,31 +62,22 @@ const sendVerificationEmail = async (email, otp) => {
       'If you did not register for CitiPoints,',
       'you can ignore this email.'
     ].join('\n')
-  });
+  );
 };
 
-
-
-/* =====================================================
-   SEND PASSWORD RESET EMAIL
-   ===================================================== */
+// =====================================================
+// SEND PASSWORD RESET OTP
+// =====================================================
 
 const sendPasswordResetEmail = async (email, otp) => {
   if (!/^\d{6}$/.test(String(otp))) {
     throw new Error('Invalid password reset OTP format.');
   }
 
-  await transporter.sendMail({
-    from: {
-      name: 'CitiPoints',
-      address: process.env.SMTP_USER
-    },
-
-    to: email,
-
-    subject: 'CitiPoints - Password Reset Code',
-
-    text: [
+  return sendEmail(
+    email,
+    'CitiPoints - Password Reset Code',
+    [
       'CitiPoints Password Recovery',
       '',
       'We received a request to reset your CitiPoints password.',
@@ -73,7 +92,7 @@ const sendPasswordResetEmail = async (email, otp) => {
       '',
       'CitiPoints - Mandaue City'
     ].join('\n')
-  });
+  );
 };
 
 module.exports = {
