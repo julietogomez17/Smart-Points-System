@@ -34,7 +34,12 @@ async function checkFraudRisk(claimData, useGpsModel = false) {
 
   } catch (error) {
     console.error("========== CITIPOINTS AI ERROR ==========");
-    console.error("AI URL:", `${AI_BASE_URL}${endpoint}`);
+   
+console.error(
+  "AI URL:",
+  `${AI_BASE_URL}${useGpsModel ? "/predict-v2" : "/predict"}`
+);
+
     console.error("Error code:", error.code || "N/A");
     console.error("HTTP status:", error.response?.status || "N/A");
     console.error("Error message:", error.message);
