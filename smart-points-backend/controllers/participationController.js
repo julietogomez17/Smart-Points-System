@@ -2026,7 +2026,105 @@ LEFT JOIN activity_attendance aa
     });
   });
 };
+  // ==========================================
+// SECURE PARTICIPATION PROOF VIEWING
+// ==========================================
 
+const path = require("path");
+
+const getParticipationProof = async (req, res) => {
+  try {
+    const participationId = Number(req.params.id);
+    const userId = Number(req.user.user_id);
+    const role = req.user.role;
+
+    if (!Number.isSafeInteger(participationId) || participationId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid participation ID."
+      });
+    }
+
+    const records = await query(
+      `SELECT
+         pr.user_id,
+         pr.proof_url,
+         a.created_by
+       FROM participation_records pr
+       INNER JOIN activities a
+         ON a.activity_id = pr.activity_id
+       WHERE pr.participation_id = ?
+       LIMIT 1`,
+      [participationId]
+    );
+
+    if (!records.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Participation proof not found."
+      });
+    }
+
+    const record = records[0];
+
+    const isOwner =
+      role === "community_member" &&
+      Number(record.user_id) === userId;
+
+    const isAuthorizedLgu =
+      role === "lgu" &&
+      Number(record.created_by) === userId;
+
+    const isAdmin = role === "admin";
+
+    if (!isOwner && !isAuthorizedLgu && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this proof."
+      });
+    }
+
+    const proofUrl = String(record.proof_url || "");
+    const match = /^uploads\/proofs\/([^/\\]+)$/i.exec(proofUrl);
+
+    if (!match || match[1] === "." || match[1] === "..") {
+      return res.status(404).json({
+        success: false,
+        message: "Proof image unavailable."
+      });
+    }
+
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "uploads",
+      "proofs",
+      match[1]
+    );
+
+    return res.sendFile(filePath, {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff"
+      }
+    }, (error) => {
+      if (error && !res.headersSent) {
+        return res.status(error.statusCode || 404).json({
+          success: false,
+          message: "Unable to load participation proof."
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error("SECURE PROOF ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to retrieve participation proof."
+    });
+  }
+};
 // ==========================================
 // EXPORT CONTROLLER FUNCTIONS
 // ==========================================
@@ -2039,5 +2137,6 @@ module.exports = {
   getReviewQueue,
   approveParticipation,
   rejectParticipation,
-  getParticipantsByActivity
+  getParticipantsByActivity,
+  getParticipationProof
 };
