@@ -6,8 +6,9 @@ const {
   getMyParticipations,
   getReviewQueue,
   approveParticipation,
-  rejectParticipation,
-  getParticipantsByActivity
+   rejectParticipation,
+  getParticipantsByActivity,
+  getParticipationProof
 } = require('../controllers/participationController');
 
 const {
@@ -32,7 +33,12 @@ router.get(
  authorizeRoles('admin', 'lgu'),
   getParticipantsByActivity
 );
-
+router.get(
+  '/:id/proof',
+  verifyToken,
+  authorizeRoles('community_member', 'admin', 'lgu'),
+  getParticipationProof
+);
 router.get(
   '/my',
   verifyToken,

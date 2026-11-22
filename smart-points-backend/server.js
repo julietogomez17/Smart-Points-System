@@ -64,7 +64,27 @@ app.use(
   })
 );
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+
+// Public activity images
+app.use(
+  '/uploads/activities',
+  express.static(path.join(__dirname, 'uploads', 'activities'))
+);
+
+// Public reward images
+app.use(
+  '/uploads/rewards',
+  express.static(path.join(__dirname, 'uploads', 'rewards'))
+);
+
+// Block direct access to private participation proofs
+app.use('/uploads/proofs', (req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Participation proofs require authorized access.'
+  });
+});
 
 
 
