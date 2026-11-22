@@ -726,7 +726,6 @@ if (isLGU) {
     'Mandaue City',
     passwordHash,
     role,
-   role,
 'active'
   ]
 );
