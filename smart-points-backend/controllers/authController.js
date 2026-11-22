@@ -982,11 +982,14 @@ return res.status(201).json({
     }
 
     // Avoid logging ID images or full SQL statements.
-    console.error('Registration error:', {
-      code: error.code,
-      errno: error.errno,
-      sqlState: error.sqlState
-    });
+   console.error('Registration error:', {
+  code: error.code,
+  errno: error.errno,
+  sqlState: error.sqlState,
+  duplicateKey: error.code === 'ER_DUP_ENTRY'
+    ? error.sqlMessage?.match(/for key '([^']+)'/)?.[1] || 'unknown'
+    : undefined
+});
 
    if (error.code === 'DUPLICATE_LGU_OFFICE') {
   return res.status(409).json({
