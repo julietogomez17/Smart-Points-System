@@ -106,9 +106,11 @@ function LoginPage() {
   return (
    <div className="citipoints-auth-page citipoints-login-page">
 
-    {verificationEmail && (
+   
+{verificationEmail && (
   <EmailVerification
     email={verificationEmail}
+    autoSend={true}
     onClose={() => setVerificationEmail('')}
     onVerified={() => {
       setVerificationEmail('');
@@ -280,31 +282,6 @@ function LoginPage() {
 
           </form>
 
-          {/* EMAIL VERIFICATION FOR EXISTING ACCOUNTS */}
-          <button
-            type="button"
-            onClick={() => {
-              const email = form.email.trim().toLowerCase();
-
-              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                showMessage('Enter your email address first.', 'error');
-                return;
-              }
-
-              setVerificationEmail(email);
-            }}
-            style={{
-              display: 'block',
-              margin: '12px auto',
-              background: 'none',
-              border: 'none',
-              color: '#2563eb',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            Verify Email / Resend OTP
-          </button>
 
           <div className="citipoints-divider">
             <span></span>

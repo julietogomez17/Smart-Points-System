@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 
 export default function EmailVerification({
   email,
   onClose,
   onVerified,
-  initialEmailSent = false
+   initialEmailSent = false,
+  autoSend = false
 }) {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,58 @@ export default function EmailVerification({
       : 'Request a verification code to continue.'
   );
   const [error, setError] = useState('');
+
+  // Automatically request an OTP only when explicitly enabled.
+  // Registration keeps its existing OTP behavior.
+  const autoSendStarted = useRef(false);
+
+  useEffect(() => {
+    if (!autoSend || initialEmailSent || autoSendStarted.current) {
+      return;
+    }
+
+    autoSendStarted.current = true;
+
+    let cancelled = false;
+
+    const requestOTP = async () => {
+      setResending(true);
+      setError('');
+      setMessage('Requesting your verification code...');
+
+      try {
+        const response = await api.post('/auth/resend-otp', {
+          email: email.trim().toLowerCase()
+        });
+
+        if (!cancelled) {
+          setMessage(
+            response.data.message ||
+            'If verification is required, a code will be sent.'
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err.response?.data?.message ||
+            'Unable to send a code. Please try again.'
+          );
+          setMessage('You can request a code using the button below.');
+        }
+      } finally {
+        if (!cancelled) {
+          setResending(false);
+        }
+      }
+    };
+
+    requestOTP();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoSend, initialEmailSent, email]);
+
 
   const verify = async (e) => {
     e.preventDefault();

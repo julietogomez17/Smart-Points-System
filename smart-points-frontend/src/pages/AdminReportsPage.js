@@ -4,6 +4,7 @@ import api from '../services/api';
 function AdminReportsPage() {
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
+    const [proofImages, setProofImages] = useState({});
 
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
@@ -66,7 +67,51 @@ function AdminReportsPage() {
       setLoading(false);
     }
   };
+    useEffect(() => {
+    let cancelled = false;
+    const objectUrls = [];
 
+    const loadProofs = async () => {
+      const images = {};
+
+      await Promise.all(
+        records
+          .filter(record => record.proof_url && record.participation_id)
+          .map(async record => {
+            try {
+              const response = await api.get(
+                `/participations/${record.participation_id}/proof`,
+                { responseType: 'blob' }
+              );
+
+              if (cancelled) return;
+
+              const url = URL.createObjectURL(response.data);
+              objectUrls.push(url);
+              images[record.participation_id] = url;
+            } catch (error) {
+              console.error(
+                'Failed to load protected proof:',
+                record.participation_id,
+                error
+              );
+            }
+          })
+      );
+
+      if (!cancelled) {
+        setProofImages(images);
+      }
+    };
+
+    setProofImages({});
+    loadProofs();
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [records]);
   /* =========================================================
      APPROVE
      ========================================================= */
@@ -147,19 +192,12 @@ function AdminReportsPage() {
      HELPERS
      ========================================================= */
 
-const getProofUrl = (proofUrl) => {
-  if (!proofUrl) return null;
-
-  if (
-    proofUrl.startsWith('http://') ||
-    proofUrl.startsWith('https://')
-  ) {
-    return proofUrl;
+const getProofUrl = (record) => {
+  if (!record?.proof_url || !record?.participation_id) {
+    return null;
   }
 
-  const backendURL = api.defaults.baseURL.replace(/\/api\/?$/, '');
-
-  return `${backendURL}/${proofUrl.replace(/^\/+/, '')}`;
+  return proofImages[record.participation_id] || null;
 };
   const formatDate = (value) => {
     if (!value) return 'N/A';
@@ -627,9 +665,7 @@ addNote(fallback);
      SELECTED RECORD VALUES
      ========================================================= */
 
-  const selectedProofUrl = getProofUrl(
-    selectedRecord?.proof_url
-  );
+const selectedProofUrl = getProofUrl(selectedRecord);
 
   const selectedRiskLevel = getRiskLevel(
     selectedRecord?.ai_score
@@ -922,9 +958,7 @@ const selectedGpsLabel = {
                 </tr>
               ) : (
                 filteredRecords.map((record) => {
-                  const proofUrl = getProofUrl(
-                    record.proof_url
-                  );
+               const proofUrl = getProofUrl(record);
 
                   const riskLevel = getRiskLevel(
                     record.ai_score

@@ -12,6 +12,13 @@ const db = require("../config/db");
 const fs = require("fs");
 const crypto = require("crypto");
 const exifr = require("exifr");
+const path = require("path");
+const { cloudinary } = require("../config/cloudinary");
+const {
+  saveImage,
+  cleanupTemporaryImage,
+  useCloudinary
+} = require("../utils/imageStorage");
 
 const { checkFraudRisk } = require("../services/aiService");
 const { createNotification } = require("./notificationController");
@@ -602,9 +609,9 @@ const submitParticipation = async (req, res) => {
     feedback_text
   } = req.body;
 
-  const proof_url = req.file
-    ? `uploads/proofs/${req.file.filename}`
-    : null;
+  let proof_url = req.file
+  ? `uploads/proofs/${req.file.filename}`
+  : null;
 
   const proof_hash = req.file
     ? generateFileHash(req.file.path)
@@ -1199,6 +1206,18 @@ if (
     // ======================================
 
    
+    // ======================================
+    // CLOUDINARY PARTICIPATION PROOF UPLOAD
+    // ======================================
+
+    if (req.file) {
+      proof_url = await saveImage(req.file, {
+        folder: "participation-proofs",
+        localFolder: "proofs",
+        privateImage: true
+      });
+    }
+
 
 const insertResult = await query(
   `INSERT INTO participation_records
@@ -1236,6 +1255,14 @@ const insertResult = await query(
 );
 
 
+
+    // ======================================
+    // CLEAN UP TEMPORARY CLOUDINARY UPLOAD
+    // ======================================
+
+    if (req.file && useCloudinary) {
+      await cleanupTemporaryImage(req.file);
+    }
 
     // ======================================
     // 17. NOTIFY ADMINISTRATORS
@@ -2026,11 +2053,9 @@ LEFT JOIN activity_attendance aa
     });
   });
 };
-  // ==========================================
+ // ==========================================
 // SECURE PARTICIPATION PROOF VIEWING
 // ==========================================
-
-const path = require("path");
 
 const getParticipationProof = async (req, res) => {
   try {
@@ -2085,6 +2110,74 @@ const getParticipationProof = async (req, res) => {
     }
 
     const proofUrl = String(record.proof_url || "");
+
+    // ======================================
+    // PRIVATE CLOUDINARY PARTICIPATION PROOF
+    // ======================================
+
+    if (proofUrl.startsWith("cloudinary-auth:")) {
+      const publicId = proofUrl.slice("cloudinary-auth:".length);
+
+      if (
+        !publicId.startsWith("citipoints/participation-proofs/") ||
+        publicId.includes("..") ||
+        publicId.includes("\\") ||
+        publicId.includes("?") ||
+        publicId.includes("#")
+      ) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid participation proof reference."
+        });
+      }
+
+      try {
+        const signedUrl = cloudinary.url(publicId, {
+          resource_type: "image",
+          type: "authenticated",
+          sign_url: true,
+          secure: true,
+          expires_at: Math.floor(Date.now() / 1000) + 60
+        });
+
+        const response = await fetch(signedUrl);
+
+        if (!response.ok) {
+          throw new Error(`Cloudinary returned ${response.status}`);
+        }
+
+        const contentType =
+          response.headers.get("content-type") || "image/jpeg";
+
+        if (!contentType.startsWith("image/")) {
+          throw new Error("Unexpected proof content type.");
+        }
+
+        const imageBuffer = Buffer.from(
+          await response.arrayBuffer()
+        );
+
+        res.set({
+          "Content-Type": contentType,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff"
+        });
+
+        return res.status(200).send(imageBuffer);
+
+      } catch (error) {
+        console.error(
+          "CLOUDINARY PROOF RETRIEVAL ERROR:",
+          error.message
+        );
+
+        return res.status(404).json({
+          success: false,
+          message: "Unable to load private participation proof."
+        });
+      }
+    }
+
     const match = /^uploads\/proofs\/([^/\\]+)$/i.exec(proofUrl);
 
     if (!match || match[1] === "." || match[1] === "..") {

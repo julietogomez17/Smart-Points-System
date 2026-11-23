@@ -36,3 +36,5 @@ CITIPOINTS_AI/ai_error.txt
 CITIPOINTS_AI/screen_training_mistakes.csv
 smart-points-backend/tests/test-back-id.jpg
 smart-points-backend/tests/test-front-id.jpg
+# Private uploaded files
+**/uploads/
