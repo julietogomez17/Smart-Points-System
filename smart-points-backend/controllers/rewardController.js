@@ -1,4 +1,12 @@
 const db = require('../config/db');
+
+const {
+  saveImage,
+  cleanupTemporaryImage,
+  rollbackUploadedImage,
+  useCloudinary
+} = require("../utils/imageStorage");
+
 const { createNotification} = require('./notificationController');
 
 const BENEFIT_MAP = {
@@ -148,7 +156,7 @@ const getRewardById = (req, res) => {
 // CREATE REWARD
 // =====================================================
 
-const createReward = (req, res) => {
+const createReward = async (req, res) => {
  const {
   reward_name,
   description,
@@ -158,12 +166,7 @@ const createReward = (req, res) => {
   partner_id
 } = req.body;
 
-// Save the uploaded image path in the database.
-const image_url = req.file
-  ? `/uploads/rewards/${req.file.filename}`
-  : null;
-
-  if (
+ if (
     !reward_name ||
     points_cost === undefined ||
     stock === undefined
@@ -174,6 +177,10 @@ const image_url = req.file
         'reward_name, points_cost, and stock are required'
     });
   }
+ 
+
+
+  
 
   const userRole = req.user.role;
   const userId = req.user.user_id;
@@ -182,11 +189,39 @@ const image_url = req.file
   // INSERT REWARD
   // ===================================================
 
-  const insertReward = (finalPartnerId) => {
+const insertReward = async (finalPartnerId) => {
     const finalStatus =
       userRole === 'partner'
         ? 'pending'
         : 'available';
+
+    // ==========================================
+    // SAVE REWARD IMAGE AFTER ACCOUNT VALIDATION
+    // Localhost: local image storage
+    // Render: Cloudinary image storage
+    // ==========================================
+
+    let image_url = null;
+
+    if (req.file) {
+      try {
+        image_url = await saveImage(req.file, {
+          folder: "rewards",
+          localFolder: "rewards",
+          privateImage: false
+        });
+
+        await cleanupTemporaryImage(req.file);
+      } catch (error) {
+        console.error("CREATE REWARD IMAGE ERROR:", error);
+        await cleanupTemporaryImage(req.file);
+
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload reward image."
+        });
+      }
+    }
 
    
 const sql = `
@@ -219,12 +254,14 @@ const sql = `
   image_url || null,
   finalStatus
 ],
-      (err, result) => {
-        if (err) {
-          console.error(
-            'CREATE REWARD ERROR:',
-            err
-          );
+     async (err, result) => {
+  if (err) {
+    console.error(
+      'CREATE REWARD ERROR:',
+      err
+    );
+
+    await rollbackUploadedImage(image_url);
 
           return res.status(500).json({
             success: false,
@@ -627,7 +664,7 @@ const rejectReward = (req, res) => {
 // UPDATE REWARD
 
 // UPDATE REWARD
-const updateReward = (req, res) => {
+const updateReward = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.user_id;
   const role = req.user.role;
@@ -641,10 +678,11 @@ const updateReward = (req, res) => {
   availability_status
 } = req.body;
 
-// Undefined means no replacement image was uploaded.
-const image_url = req.file
-  ? `/uploads/rewards/${req.file.filename}`
-  : undefined;
+
+  // Keep the existing image when no replacement is uploaded.
+  // The replacement image will be processed only after
+  // reward ownership and input validation succeed.
+  let image_url = undefined;
 
 const checkSql = `
   SELECT
@@ -657,7 +695,7 @@ const checkSql = `
   LIMIT 1
 `;
 
-  db.query(checkSql, [id], (checkErr, rows) => {
+  db.query(checkSql, [id], async (checkErr, rows) => {
     if (checkErr) {
       console.error('CHECK REWARD OWNERSHIP ERROR:', checkErr);
       return res.status(500).json({
@@ -711,8 +749,36 @@ const checkSql = `
 
     // Partners cannot publish or reactivate rewards through editing.
     const status = role === 'partner'
+    
       ? reward.availability_status
       : finalStatus;
+
+
+    // ==========================================
+    // SAVE REPLACEMENT REWARD IMAGE
+    // Localhost: local uploads
+    // Render: Cloudinary
+    // ==========================================
+
+    if (req.file) {
+      try {
+        image_url = await saveImage(req.file, {
+          folder: "rewards",
+          localFolder: "rewards",
+          privateImage: false
+        });
+      } catch (error) {
+        console.error("UPDATE REWARD IMAGE ERROR:", error);
+        await cleanupTemporaryImage(req.file);
+
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload replacement reward image."
+        });
+      }
+    }
+
+      
 
     const sql = `
       UPDATE rewards
@@ -744,22 +810,32 @@ const checkSql = `
       params.push(userId);
     }
 
-    db.query(sql, params, (err, result) => {
-      if (err) {
-        console.error('UPDATE REWARD ERROR:', err);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to update reward'
-        });
-      }
+    db.query(sql, params, async (err, result) => {
+  if (err) {
+    console.error('UPDATE REWARD ERROR:', err);
 
-      if (!result.affectedRows) {
-        return res.status(403).json({
-          success: false,
-          message: 'Reward update was not permitted.'
-        });
-      }
+    // Remove the newly uploaded Cloudinary image
+    // if the database update fails.
+    await rollbackUploadedImage(image_url);
 
+    await cleanupTemporaryImage(req.file);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update reward'
+    });
+  }
+
+    if (!result.affectedRows) {
+  await rollbackUploadedImage(image_url);
+  await cleanupTemporaryImage(req.file);
+
+  return res.status(403).json({
+    success: false,
+    message: 'Reward update was not permitted.'
+  });
+}
+        await cleanupTemporaryImage(req.file);
       return res.status(200).json({
         success: true,
         message: 'Reward updated successfully'

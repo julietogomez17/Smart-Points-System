@@ -3,6 +3,14 @@ const db = require("../config/db");
 const { logAudit } = require("../utils/auditLogger");
 const fs = require("fs");
 const crypto = require("crypto");
+
+const {
+  saveImage,
+  cleanupTemporaryImage,
+  rollbackUploadedImage,
+  useCloudinary
+} = require("../utils/imageStorage");
+
 const QRCode = require("qrcode");
 
 const {
@@ -589,7 +597,10 @@ const createActivity = async (req, res) => {
 
   const userId = req.user.user_id;
   const userRole = req.user.role;
-  const imagePath = getUploadedActivityImagePath(req.file);
+ let imagePath = getUploadedActivityImagePath(req.file);  
+ // Track only the newly uploaded image for safe rollback.
+let newlyUploadedImage = null;
+let activitySaved = false;
 
 
 
@@ -693,6 +704,21 @@ if (!isAllowedCommunityCategory(category)) {
     // CREATE ACTIVITY AND QR CODES ATOMICALLY
     // ==========================================
 
+    // ==========================================
+    // SAVE ACTIVITY IMAGE
+    // Localhost: preserve existing local storage
+    // Render: upload image to Cloudinary
+    // ==========================================
+
+    if (req.file) {
+      imagePath = await saveImage(req.file, {
+        folder: "activities",
+        localFolder: "activities",
+        privateImage: false
+      });
+      newlyUploadedImage = imagePath;
+    }
+
     const result = await withTransaction(async (txQuery) => {
 
       // STEP 1: CREATE ACTIVITY
@@ -767,7 +793,7 @@ if (!isAllowedCommunityCategory(category)) {
     });
 
   
-
+    activitySaved = true;    activitySaved = true;    activitySaved = true;
     auditActivity(
       userId,
       "CREATE",
@@ -776,6 +802,7 @@ if (!isAllowedCommunityCategory(category)) {
         ? `Partner submitted activity for approval: ${title}`
         : `Admin created activity: ${title}`
     );
+    await cleanupTemporaryImage(req.file);
 
     return res.status(201).json({
       success: true,
@@ -793,7 +820,11 @@ if (!isAllowedCommunityCategory(category)) {
   } catch (error) {
     removeUploadedActivityImage(req.file);
 
+  if (!activitySaved && newlyUploadedImage) {
+  await rollbackUploadedImage(newlyUploadedImage);
+}
     console.error("CREATE ACTIVITY ERROR:", error);
+    
 
     return res.status(500).json({
       success: false,
@@ -1034,7 +1065,8 @@ const regenerateActivityQrCodes = async (req, res) => {
 
 const updateActivity = async (req, res) => {
   const { id } = req.params;
-
+  let newlyUploadedImage = null;
+  let activityUpdated = false;
   const {
     title,
     description,
@@ -1146,9 +1178,19 @@ if (!isAllowedCommunityCategory(category)) {
           ? status
           : "draft";
 
-    const imagePath = req.file
-      ? getUploadedActivityImagePath(req.file)
-      : activity.image_url;
+    
+    // Preserve the existing image if no new one was uploaded.
+    let imagePath = activity.image_url;
+
+    if (req.file) {
+      imagePath = await saveImage(req.file, {
+        folder: "activities",
+        localFolder: "activities",
+        privateImage: false
+      });
+      newlyUploadedImage = imagePath;
+    }
+
 
     const result = await query(
       `UPDATE activities
@@ -1194,6 +1236,9 @@ if (!isAllowedCommunityCategory(category)) {
 
     if (!result.affectedRows) {
       removeUploadedActivityImage(req.file);
+      if (newlyUploadedImage) {
+  await rollbackUploadedImage(newlyUploadedImage);
+}
 
       return res.status(400).json({
         success: false,
@@ -1210,6 +1255,7 @@ if (!isAllowedCommunityCategory(category)) {
         ? `Partner updated activity and sent it back to pending review: ${title}`
         : `Updated activity: ${title}`
     );
+    await cleanupTemporaryImage(req.file);
 
     return res.status(200).json({
       success: true,
